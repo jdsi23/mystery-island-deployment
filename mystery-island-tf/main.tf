@@ -2,37 +2,63 @@ provider "aws" {
   region = "us-east-1"
 }
 
-resource "aws_iam_role" "ec2_ssm_role" {
-  name = "ec2_ssm_role"
+# Create a custom VPC
+resource "aws_vpc" "custom" {
+  cidr_block = "10.0.0.0/16"
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = {
-        Service = "ec2.amazonaws.com"
-      }
-      Action = "sts:AssumeRole"
-    }]
-  })
+  tags = {
+    Name = "mystery-vpc"
+  }
 }
 
-resource "aws_iam_role_policy_attachment" "ssm_attach" {
-  role       = aws_iam_role.ec2_ssm_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+# Create a custom subnet inside the VPC
+resource "aws_subnet" "custom" {
+  vpc_id            = aws_vpc.custom.id
+  cidr_block        = "10.0.1.0/24"
+  availability_zone = "us-east-1a"
+
+  tags = {
+    Name = "mystery-subnet"
+  }
 }
 
-resource "aws_iam_instance_profile" "ec2_ssm_profile" {
-  name = "ec2_ssm_profile"
-  role = aws_iam_role.ec2_ssm_role.name
+# Internet Gateway for public access
+resource "aws_internet_gateway" "gw" {
+  vpc_id = aws_vpc.custom.id
 }
 
+# Route Table to route traffic to the internet
+resource "aws_route_table" "rt" {
+  vpc_id = aws_vpc.custom.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.gw.id
+  }
+}
+
+# Associate Route Table with Subnet
+resource "aws_route_table_association" "a" {
+  subnet_id      = aws_subnet.custom.id
+  route_table_id = aws_route_table.rt.id
+}
+
+# Security Group for EC2 instance
 resource "aws_security_group" "web_sg" {
   name        = "web-sg"
-  description = "Allow HTTP"
-  vpc_id      = data.aws_vpc.default.id
+  description = "Allow HTTP and SSH"
+  vpc_id      = aws_vpc.custom.id
 
   ingress {
+    description = "SSH"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "HTTP"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
@@ -45,36 +71,22 @@ resource "aws_security_group" "web_sg" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-}
 
-data "aws_vpc" "default" {
-  default = true
-}
-
-data "aws_ami" "amazon_linux" {
-  most_recent = true
-  owners      = ["amazon"]
-
-  filter {
-    name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  tags = {
+    Name = "web-sg"
   }
 }
 
+# EC2 instance
 resource "aws_instance" "web" {
-  ami                    = data.aws_ami.amazon_linux.id
-  instance_type          = "t2.micro"
-  subnet_id              = data.aws_subnet.default.id
-  security_groups        = [aws_security_group.web_sg.name]
-  iam_instance_profile   = aws_iam_instance_profile.ec2_ssm_profile.name
-
+  ami                    = var.ami_id
+  instance_type          = var.instance_type
+  subnet_id              = aws_subnet.custom.id
+  vpc_security_group_ids = [aws_security_group.web_sg.id]
+  key_name               = var.key_name
   user_data              = file("scripts/init-nginx.sh")
 
   tags = {
-    Name = "MysteryIsland-VM"
+    Name = "MysteryIslandWebServer"
   }
-}
-
-data "aws_subnet" "default" {
-  default_for_az = true
 }
