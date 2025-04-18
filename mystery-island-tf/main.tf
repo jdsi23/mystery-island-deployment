@@ -83,15 +83,8 @@ resource "aws_instance" "web" {
   instance_type          = "t2.medium"
   subnet_id              = aws_subnet.custom.id
   vpc_security_group_ids = [aws_security_group.web_sg.id]
-  key_name               = var.key_name
 
   tags = {
     Name = "MysteryIslandWebServer"
   }
-}
-
-# Variable definition for the EC2 key pair
-variable "key_name" {
-  description = "The name of the key pair to use for EC2"
-  type        = string
 }
