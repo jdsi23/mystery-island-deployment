@@ -103,6 +103,4 @@ resource "aws_s3_bucket" "mystery_bucket" {
     Name        = "MysteryIslandBucket"
     Environment = "Production"
   }
-
-  object_ownership = "ObjectWriter"
 }
