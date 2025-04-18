@@ -89,3 +89,20 @@ resource "aws_instance" "web" {
     Name = "MysteryIslandWebServer"
   }
 }
+
+# S3 Bucket
+resource "aws_s3_bucket" "mystery_bucket" {
+  bucket = "mystery-island-bucket"  # Make sure the name is globally unique
+  acl    = "private"
+
+  versioning {
+    enabled = true
+  }
+
+  tags = {
+    Name        = "MysteryIslandBucket"
+    Environment = "Production"
+  }
+
+  object_ownership = "ObjectWriter"
+}
