@@ -92,15 +92,18 @@ resource "aws_instance" "web" {
 
 # S3 Bucket
 resource "aws_s3_bucket" "mystery_bucket" {
-  bucket = "mystery-island-bucket"  # Make sure the name is globally unique
-  acl    = "private"
-
-  versioning {
-    enabled = true
-  }
+  bucket = "mystery-bucket-island"
 
   tags = {
-    Name        = "MysteryIslandBucket"
-    Environment = "Production"
+    Name        = "MysteryBucket"
+    Environment = "dev"
+  }
+}
+
+resource "aws_s3_bucket_versioning" "mystery_bucket_versioning" {
+  bucket = aws_s3_bucket.mystery_bucket.id
+
+  versioning_configuration {
+    status = "Enabled"
   }
 }
