@@ -108,3 +108,4 @@ resource "aws_instance" "web" {
   instance_type               = "t2.medium"
   subnet_id                   = aws_subnet.mystery_subnet.id
   vpc_security_group_ids      = [aws_security_group.web_sg.id]
+}
