@@ -2,24 +2,8 @@ provider "aws" {
   region = "us-east-1"
 }
 
-# Generate random suffix for globally unique S3 bucket name
-resource "random_id" "bucket_id" {
-  byte_length = 4
-}
-
-# Get latest Ubuntu 20.04 AMI for us-east-1
-data "aws_ami" "ubuntu" {
-  most_recent = true
-  owners      = ["099720109477"]
-
-  filter {
-    name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*"]
-  }
-}
-
-# Custom VPC
-resource "aws_vpc" "mystery_vpc" {
+# VPC
+resource "aws_vpc" "custom" {
   cidr_block = "10.0.0.0/16"
 
   tags = {
@@ -27,12 +11,11 @@ resource "aws_vpc" "mystery_vpc" {
   }
 }
 
-# Public Subnet
-resource "aws_subnet" "mystery_subnet" {
-  vpc_id                  = aws_vpc.mystery_vpc.id
-  cidr_block              = "10.0.1.0/24"
-  availability_zone       = "us-east-1a"
-  map_public_ip_on_launch = true
+# Subnet
+resource "aws_subnet" "custom" {
+  vpc_id            = aws_vpc.custom.id
+  cidr_block        = "10.0.1.0/24"
+  availability_zone = "us-east-1a"
 
   tags = {
     Name = "mystery-subnet"
@@ -41,16 +24,16 @@ resource "aws_subnet" "mystery_subnet" {
 
 # Internet Gateway
 resource "aws_internet_gateway" "gw" {
-  vpc_id = aws_vpc.mystery_vpc.id
+  vpc_id = aws_vpc.custom.id
 
   tags = {
-    Name = "mystery-igw"
+    Name = "mystery-gateway"
   }
 }
 
 # Route Table
-resource "aws_route_table" "public_rt" {
-  vpc_id = aws_vpc.mystery_vpc.id
+resource "aws_route_table" "rt" {
+  vpc_id = aws_vpc.custom.id
 
   route {
     cidr_block = "0.0.0.0/0"
@@ -58,32 +41,32 @@ resource "aws_route_table" "public_rt" {
   }
 
   tags = {
-    Name = "mystery-public-rt"
+    Name = "mystery-rt"
   }
 }
 
-# Associate Route Table with Subnet
-resource "aws_route_table_association" "public_assoc" {
-  subnet_id      = aws_subnet.mystery_subnet.id
-  route_table_id = aws_route_table.public_rt.id
+# Associate Route Table
+resource "aws_route_table_association" "a" {
+  subnet_id      = aws_subnet.custom.id
+  route_table_id = aws_route_table.rt.id
 }
 
-# Security Group (HTTP + SSH)
+# Security Group (open SSH + HTTP)
 resource "aws_security_group" "web_sg" {
   name        = "web-sg"
-  description = "Allow HTTP and SSH access"
-  vpc_id      = aws_vpc.mystery_vpc.id
+  description = "Allow HTTP and SSH"
+  vpc_id      = aws_vpc.custom.id
 
   ingress {
-    description = "SSH Access"
+    description = "SSH access (sandbox safe)"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["YOUR_IP_HERE/32"]  # Replace with your IP
+    cidr_blocks = ["0.0.0.0/0"]  # Sandbox-safe, but wide open
   }
 
   ingress {
-    description = "HTTP Access"
+    description = "HTTP"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
@@ -104,8 +87,37 @@ resource "aws_security_group" "web_sg" {
 
 # EC2 Instance
 resource "aws_instance" "web" {
-  ami                         = data.aws_ami.ubuntu.id
+  ami                         = "ami-0c02fb55956c7d316" # Amazon Linux 2, us-east-1
   instance_type               = "t2.medium"
-  subnet_id                   = aws_subnet.mystery_subnet.id
+  subnet_id                   = aws_subnet.custom.id
   vpc_security_group_ids      = [aws_security_group.web_sg.id]
+  associate_public_ip_address = true
+
+  tags = {
+    Name = "MysteryIslandWebServer"
+  }
+}
+
+# S3 Bucket
+resource "aws_s3_bucket" "mystery_bucket" {
+  bucket = "mystery-bucket-island-${random_id.rand.hex}" # Ensures uniqueness
+
+  tags = {
+    Name        = "MysteryBucket"
+    Environment = "dev"
+  }
+}
+
+# S3 Bucket versioning
+resource "aws_s3_bucket_versioning" "versioning" {
+  bucket = aws_s3_bucket.mystery_bucket.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# Generate random ID for unique bucket names (required)
+resource "random_id" "rand" {
+  byte_length = 4
 }
