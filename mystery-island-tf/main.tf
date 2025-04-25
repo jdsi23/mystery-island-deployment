@@ -145,10 +145,8 @@ module "iam_user" {
 
   password_reset_required = false
 
-  attach_policy_arns = true
   policy_arns = [
     "arn:aws:iam::aws:policy/AmazonS3FullAccess",
     "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
   ]
 }
-
