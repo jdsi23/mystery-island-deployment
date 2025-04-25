@@ -122,7 +122,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "encryption" {
   bucket = aws_s3_bucket.mystery_bucket.id
 
   rule {
-    # Default encryption using AES-256 (SSE-S3)
+# Default encryption using AES-256 (SSE-S3)
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
     }
