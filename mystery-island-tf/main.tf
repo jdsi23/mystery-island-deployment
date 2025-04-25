@@ -117,7 +117,38 @@ resource "aws_s3_bucket_versioning" "versioning" {
   }
 }
 
+# S3 Bucket encryption
+resource "aws_s3_bucket_server_side_encryption_configuration" "encryption" {
+  bucket = aws_s3_bucket.mystery_bucket.id
+
+  rule {
+    # Default encryption using AES-256 (SSE-S3)
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
 # Generate random ID for unique bucket names (required)
 resource "random_id" "rand" {
   byte_length = 4
 }
+
+# IAM User
+module "iam_user" {
+  source  = "terraform-aws-modules/iam/aws//modules/iam-user"
+
+  name          = "mystery-user"
+  force_destroy = true
+
+  pgp_key = "keybase:test"
+
+  password_reset_required = false
+
+  attach_policy_arns = true
+  policy_arns = [
+    "arn:aws:iam::aws:policy/AmazonS3FullAccess",
+    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  ]
+}
+
