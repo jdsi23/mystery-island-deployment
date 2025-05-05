@@ -1,5 +1,19 @@
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
 provider "aws" {
   region = "us-east-1"
+}
+
+# Generate random ID for unique S3 bucket names
+resource "random_id" "rand" {
+  byte_length = 4
 }
 
 # VPC
@@ -45,24 +59,24 @@ resource "aws_route_table" "rt" {
   }
 }
 
-# Associate Route Table
+# Associate Route Table with Subnet
 resource "aws_route_table_association" "a" {
   subnet_id      = aws_subnet.custom.id
   route_table_id = aws_route_table.rt.id
 }
 
-# Security Group (open SSH + HTTP)
+# Security Group: HTTP + SSH
 resource "aws_security_group" "web_sg" {
   name        = "web-sg"
   description = "Allow HTTP and SSH"
   vpc_id      = aws_vpc.custom.id
 
   ingress {
-    description = "SSH access (sandbox safe)"
+    description = "SSH access"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # Sandbox-safe, but wide open
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
@@ -87,7 +101,7 @@ resource "aws_security_group" "web_sg" {
 
 # EC2 Instance
 resource "aws_instance" "web" {
-  ami                         = "ami-0c02fb55956c7d316" # Amazon Linux 2, us-east-1
+  ami                         = "ami-0c02fb55956c7d316" # Amazon Linux 2 (us-east-1)
   instance_type               = "t2.medium"
   subnet_id                   = aws_subnet.custom.id
   vpc_security_group_ids      = [aws_security_group.web_sg.id]
@@ -100,15 +114,17 @@ resource "aws_instance" "web" {
 
 # S3 Bucket
 resource "aws_s3_bucket" "mystery_bucket" {
-  bucket = "mystery-bucket-island-${random_id.rand.hex}" # Ensures uniqueness
+  bucket = "mystery-bucket-island-${random_id.rand.hex}"
 
   tags = {
     Name        = "MysteryBucket"
     Environment = "dev"
   }
+
+  depends_on = [random_id.rand]
 }
 
-# S3 Bucket versioning
+# S3 Bucket Versioning
 resource "aws_s3_bucket_versioning" "versioning" {
   bucket = aws_s3_bucket.mystery_bucket.id
 
@@ -117,36 +133,70 @@ resource "aws_s3_bucket_versioning" "versioning" {
   }
 }
 
-# S3 Bucket encryption
+# S3 Bucket Encryption (SSE-S3)
 resource "aws_s3_bucket_server_side_encryption_configuration" "encryption" {
   bucket = aws_s3_bucket.mystery_bucket.id
 
   rule {
-# Default encryption using AES-256 (SSE-S3)
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
     }
   }
 }
 
-# Generate random ID for unique bucket names (required)
-resource "random_id" "rand" {
-  byte_length = 4
+# IAM Policy for Least Privilege
+resource "aws_iam_policy" "mystery_user_policy" {
+  name        = "MysteryUserLeastPrivilege"
+  description = "Minimal permissions for EC2 and S3 access"
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Sid    = "EC2InstanceManagement",
+        Effect = "Allow",
+        Action = [
+          "ec2:RunInstances",
+          "ec2:TerminateInstances",
+          "ec2:DescribeInstances",
+          "ec2:DescribeImages",
+          "ec2:DescribeSubnets",
+          "ec2:DescribeSecurityGroups",
+          "ec2:DescribeVpcs",
+          "ec2:AssociateAddress"
+        ],
+        Resource = "*"
+      },
+      {
+        Sid    = "AllowSpecificS3BucketAccess",
+        Effect = "Allow",
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:ListBucket"
+        ],
+        Resource = [
+          "arn:aws:s3:::mystery-bucket-island-*",
+          "arn:aws:s3:::mystery-bucket-island-*/*"
+        ]
+      }
+    ]
+  })
 }
 
-# IAM User
+# IAM User Module (uses custom policy above)
 module "iam_user" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-user"
 
-  name          = "mystery-user"
-  force_destroy = true
-
-  pgp_key = "keybase:test"
-
-  password_reset_required = false
+  name                     = "mystery-user"
+  force_destroy            = true
+  pgp_key                  = "keybase:test"
+  password_reset_required  = false
 
   policy_arns = [
-    "arn:aws:iam::aws:policy/AmazonS3FullAccess",
-    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    aws_iam_policy.mystery_user_policy.arn
   ]
+
+  depends_on = [aws_iam_policy.mystery_user_policy]
 }
