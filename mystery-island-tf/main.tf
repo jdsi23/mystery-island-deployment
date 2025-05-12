@@ -107,6 +107,17 @@ resource "aws_instance" "web" {
   vpc_security_group_ids      = [aws_security_group.web_sg.id]
   associate_public_ip_address = true
 
+  user_data = <<-EOF
+              #!/bin/bash
+              yum update -y
+              yum install -y python3 git
+              cd /home/ec2-user
+              git clone https://github.com/jdsi23/mystery-island-navigation.git
+              cd mystery-island-navigation
+              chmod +x start.sh
+              ./start.sh
+              EOF
+
   tags = {
     Name = "MysteryIslandWebServer"
   }
