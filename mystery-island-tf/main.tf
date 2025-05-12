@@ -65,10 +65,10 @@ resource "aws_route_table_association" "a" {
   route_table_id = aws_route_table.rt.id
 }
 
-# Security Group: HTTP + SSH
+# Security Group: HTTP + SSH + Flask (Port 5000)
 resource "aws_security_group" "web_sg" {
   name        = "web-sg"
-  description = "Allow HTTP and SSH"
+  description = "Allow HTTP, SSH, and Flask app traffic"
   vpc_id      = aws_vpc.custom.id
 
   ingress {
@@ -87,15 +87,19 @@ resource "aws_security_group" "web_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  ingress {
+    description = "Flask (Dev) Port"
+    from_port   = 5000
+    to_port     = 5000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "web-sg"
   }
 }
 
